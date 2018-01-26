@@ -1,0 +1,7 @@
+[package]
+name = "neurocr"
+version = "0.1.0"
+authors = ["legeyda"]
+
+[dependencies]
+mnist = "0.4.0"
