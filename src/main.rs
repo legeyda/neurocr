@@ -3,5 +3,6 @@
 mod mnistfiles;
 
 fn main() {
-	println!("hello, folder is {:?}", mnistfiles::ensure());   
+	mnistfiles::get_data();
+	println!("hello from neurocr");   
 }
