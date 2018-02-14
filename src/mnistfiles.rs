@@ -5,11 +5,9 @@ extern crate rulinalg;
 
 use std::env::home_dir;
 use std::fs::create_dir_all;
-use std::ffi::OsStr;
 use std::path::PathBuf;
 use self::mnist::{Mnist, MnistBuilder};
-use self::rulinalg::matrix::{BaseMatrix, BaseMatrixMut, Matrix};
-use self::rulinalg::vector::{Vector};
+use std::vec::Vec;
 
 fn get_share_dir() -> PathBuf {
 	match home_dir() {
@@ -43,25 +41,32 @@ pub fn ensure_files() -> PathBuf {
 	cache_dir
 }
 
-pub struct MnistData {
-	train_images: Matrix<u8>,
-	train_labels: Vector<u8>,
-	test_images: Matrix<u8>,
-	test_labels: Vector<u8>,
-}
+//
 
-pub fn get_data() -> MnistData {
-	const  IMAGE_SIZE: usize = 28*28;
-		
-	let mnist = MnistBuilder::new()
+// pub struct MnistData {
+// 	train_images: Matrix<f64>,
+// 	train_labels: Vector<u8>,
+// 	test_images: Matrix<f64>,
+// 	test_labels: Vector<u8>,
+// }
+
+
+const IMAGE_WIDTH:  u8 = 28;
+const IMAGE_HEIGHT: u8 = 28;
+const IMAGE_SIZE: u16 = (IMAGE_HEIGHT as u16)*(IMAGE_WIDTH as u16);
+
+
+pub fn load_data() -> Mnist {
+	MnistBuilder::new()
+		.label_format_one_hot()
 		.base_path(get_share_dir().as_os_str().to_str().unwrap())
-        .finalize();
-	
-	MnistData {
-		train_images: Matrix::new(mnist.trn_img.len()/IMAGE_SIZE, IMAGE_SIZE, mnist.trn_img),
-		train_labels: Vector::new(mnist.trn_lbl),
-		test_images:  Matrix::new(mnist.tst_img.len()/IMAGE_SIZE, IMAGE_SIZE, mnist.tst_img),
-		test_labels:  Vector::new(mnist.tst_lbl) 
-	}
+		.finalize()
+
+	// MnistData {
+	// 	train_images: Matrix::new(mnist.trn_img.len()/IMAGE_SIZE, IMAGE_SIZE, vec_to_f64(mnist.trn_img)),
+	// 	train_labels: Vector::new(vec_to_f64(mnist.trn_lbl)),
+	// 	test_images:  Matrix::new(mnist.tst_img.len()/IMAGE_SIZE, IMAGE_SIZE, vec_to_f64(mnist.test_images.data()),
+	// 	test_labels:  Vector::new(vec_to_f64(mnist.tst_lbl)) 
+	// }
 }
 

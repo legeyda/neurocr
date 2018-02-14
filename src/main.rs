@@ -3,6 +3,6 @@
 mod mnistfiles;
 
 fn main() {
-	mnistfiles::get_data();
+	mnistfiles::load_data();
 	println!("hello from neurocr");   
 }
