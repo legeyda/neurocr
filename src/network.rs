@@ -237,10 +237,6 @@ impl<T> Network<T> where T: Float + 'static {
 
 
 
-
-
-
-
 impl<'rhs, T> Add<&'rhs Network<T>> for Network<T> where T: Float {
 	type Output = Network<T>;
 	fn add(mut self, rhs: &Network<T>) -> Self::Output {
@@ -257,14 +253,16 @@ impl<'rhs, T> Add<&'rhs Network<T>> for Network<T> where T: Float {
 impl<'lhs, 'rhs, T> Add<&'rhs Network<T>> for &'lhs Network<T> where T: Float {
 	type Output = Network<T>;
 	fn add(self, rhs: &Network<T>) -> Self::Output {
-		self.clone() + rhs
-	}
-}
-
-impl<'lhs, 'rhs, T> Add<&'rhs Network<T>> for &'lhs mut Network<T> where T: Float {
-	type Output = Network<T>;
-	fn add(self, rhs: &Network<T>) -> Self::Output {
-		(self as &Network<T>).clone() + rhs
+		if self.layers.len() != rhs.layers.len() {
+			panic!("add: network dimensions do not match");
+		}
+		let mut layers = Vec::with_capacity(self.layers.len());
+		for i in 0..self.layers.len() {
+			layers.push(&self.layers[i] + &rhs.layers[i]);
+		}
+		Network {
+			layers: layers
+		}
 	}
 }
 
@@ -296,17 +294,18 @@ impl <T> Add<Layer<T>> for Layer<T> where T: Float {
 	}
 }
 
-impl <'lhs, T> Add<Layer<T>> for &'lhs Layer<T> where T: Float {
-	type Output = Layer<T>;
-	fn add(self, rhs: Layer<T>) -> Self::Output {
-		self.clone() + rhs
-	}
-}
-
 impl <'lhs, 'rhs, T> Add<&'rhs Layer<T>> for &'lhs Layer<T> where T: Float {
 	type Output = Layer<T>;
 	fn add(self, rhs: &Layer<T>) -> Self::Output {
-		self.clone() + rhs
+		if self.biases.size() != rhs.biases.size() 
+		|| self.weights.cols() != rhs.weights.cols()
+		|| self.weights.rows() != rhs.weights.rows() {
+			panic!("add: layer dimensions do not match")
+		}
+		Layer {
+			biases:  &self.biases  + &rhs.biases,
+			weights: &self.weights + &rhs.weights
+		}
 	}
 }
 
@@ -317,8 +316,8 @@ impl <'a, T> AddAssign<&'a Layer<T>> for Layer<T> where T: Float {
 		|| self.weights.rows() != rhs.weights.rows() {
 			panic!("add: layer dimensions do not match")
 		}
-		self.biases  = self.biases.clone()  + &rhs.biases;
-		self.weights = self.weights.clone() + &rhs.weights;
+		self.biases  = &self.biases  + &rhs.biases;
+		self.weights = &self.weights + &rhs.weights;
 	}
 }
 
@@ -335,8 +334,8 @@ impl<'lhs, T> Mul<T> for &'lhs Layer<T> where T: Float {
 	type Output = Layer<T>;
 	fn mul(self, multiplier: T) -> Self::Output {
 		Layer {
-			biases:  self.biases.clone()  * multiplier, 
-			weights: self.weights.clone() * multiplier
+			biases:  &self.biases  * multiplier, 
+			weights: &self.weights * multiplier
 		}
 	}
 }
