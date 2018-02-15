@@ -10,17 +10,8 @@ extern crate num;
 use self::rulinalg::matrix::{Matrix, BaseMatrix};
 use self::rulinalg::vector::{Vector};
 use self::num::{Float, One, Zero};
-use self::num::cast::NumCast;
-use std::ops::Fn;
 use std::ops::{Add, Mul, AddAssign};
 use std::vec::Vec;
-
-
-pub type float = f64;
-
-//fn f(x: f64) -> Box<Float> {
-//	FromPrimitive::from_f64(x).unwrap()
-//}
 
 
 #[inline]
@@ -29,7 +20,8 @@ fn exp<T: Float>(x: T) -> T {
 }
 
 fn sigmoid<T: Float>(x: T) -> T {
-	T::one() / (T::one() + exp(-x))
+	let one: T = T::one();
+	one / (one + exp(-x))
 }
 
 #[test]
@@ -43,9 +35,9 @@ fn sigmoid_prime<T: Float>(x: T) -> T {
 }
 
 
-struct Sample<T: Float> {
-	input: Vector<T>,
-	expected: Vector<T>
+pub struct Sample<T: Float> {
+	pub input: Vector<T>,
+	pub expected: Vector<T>
 }
 
 pub struct Layer<T> where T: Float {
@@ -64,13 +56,13 @@ impl<T> Layer<T> where T: Float {
 
 
 
-struct Network<T> where T: Float {
+pub struct Network<T> where T: Float {
 	layers: Vec<Layer<T>>
 }
 
 impl<T> Network<T> where T: Float + 'static {
 	
-	fn new(input_size: usize, layer_sizes: &Vec<usize>) -> Network<T> {
+	pub fn new(input_size: usize, layer_sizes: &[usize]) -> Network<T> {
 		let mut result = Network {
 			layers: Vec::new()
 		};
@@ -92,7 +84,7 @@ impl<T> Network<T> where T: Float + 'static {
 	}
 
 	// evaluate weighted sums and outputs of each layer
-	fn eval(&self, input: &Vector<T>) -> Vector<T> {
+	pub fn eval(&self, input: &Vector<T>) -> Vector<T> {
 		let mut iter = self.layers.iter();
 		let mut value;
 		match iter.next() {
@@ -170,7 +162,7 @@ impl<T> Network<T> where T: Float + 'static {
 		return Network { layers: result };
 	}
 
-	fn batch_grad(&self, test_data: &Vec<Sample<T>>) -> Network<T> {
+	fn batch_grad(&self, test_data: &[Sample<T>]) -> Network<T> {
 		let mut iter = test_data.iter();
 		let mut result;
 		match iter.next() {
@@ -216,20 +208,9 @@ impl<T> Network<T> where T: Float + 'static {
 	}
 
 
-
-	/// evaluate batch of samples and return rate of correct classification attempts
-	fn asses_categorizing(&self, data: &Vec<Sample<T>>) -> f32 {
-		let mut guessed = 0;
-		for datum in data {
-			guessed += if datum.expected.argmax().0 == self.eval(&datum.input).argmax().0 { 1 } else { 0 };
-		}
-		return (guessed as f32) / (data.len() as f32);
-	}
-
-	fn refine(&mut self, data: &Vec<Sample<T>>, step: T) {
+	pub fn refine(&mut self, data: &[Sample<T>], step: T) {
 		let grad = self.batch_grad(data);
-		let new  = (self as &Network<T>) + &(grad*(-step));
-		*self = new;
+		*self = (self as &Network<T>) + &(grad*(-step))
 	}
 
 

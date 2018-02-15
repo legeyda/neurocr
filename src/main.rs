@@ -1,8 +1,6 @@
 
-
-mod mnistfiles;
+extern crate neurocr;
 
 fn main() {
-	mnistfiles::load_data();
-	println!("hello from neurocr");   
+	neurocr::go();
 }

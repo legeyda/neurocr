@@ -52,14 +52,15 @@ pub fn ensure_base_dir() -> PathBuf {
 // }
 
 
-pub const IMAGE_WIDTH:  u8 = 28;
-pub const IMAGE_HEIGHT: u8 = 28;
-pub const IMAGE_SIZE: u16 = (IMAGE_HEIGHT as u16)*(IMAGE_WIDTH as u16);
+pub const IMAGE_WIDTH:  usize = 28;
+pub const IMAGE_HEIGHT: usize = 28;
+pub const IMAGE_SIZE:   usize = IMAGE_HEIGHT*IMAGE_WIDTH;
 
 
 pub fn load_data() -> Mnist {
 	MnistBuilder::new()
-		.label_format_one_hot()
+		.label_format_digit()
+		//.label_format_one_hot()
 		.base_path(ensure_base_dir().as_os_str().to_str().unwrap())
 		.finalize()
 
