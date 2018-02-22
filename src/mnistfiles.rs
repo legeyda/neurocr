@@ -38,7 +38,7 @@ pub fn ensure_base_dir() -> PathBuf {
 	// then download 
 	let cache_dir = get_cache_dir();
 	create_dir_all(cache_dir.as_path());
-	cache_dir
+	get_share_dir()
 }
 
 
