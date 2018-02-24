@@ -21,7 +21,7 @@ use mnistfiles::IMAGE_SIZE;
 use network::{Sample, Network};
 use self::num::{Float, One, Zero};
 use self::rand::Rand;
-const BATCH_SIZE: usize = 100;
+const BATCH_SIZE: usize = 10;
 
 
 /// convert from mnist data to vector of network samples
@@ -68,32 +68,27 @@ pub fn go() {
     let tst_data: Vec<network::Sample<f64>> = mnist_to_samples(&mnist_data.tst_img, &mnist_data.tst_lbl);
 
 
+
     let sizes: [usize;2] = [30, 10];
     let mut network: Network<f64> = Network::new(IMAGE_SIZE, &sizes, random);
 
-    let mut j=0;
+    debug!("go: initial network is {:?}", network);
+
+
     for k in 1..100 {
         for i in 0..trn_data.len()/BATCH_SIZE {
-            network.refine(&trn_data[BATCH_SIZE*i..BATCH_SIZE*(i+1)], 1000.0);
+            network.refine(&trn_data[BATCH_SIZE*i..BATCH_SIZE*(i+1)], 100.0);
+            //debug!("go: batch #{:?}, gradient is {:?}", i, network.batch_grad(&trn_data[BATCH_SIZE*i..BATCH_SIZE*(i+1)]));
+
 
             let mut guessed = 0;
             for datum in &tst_data {
                 guessed += if datum.expected.argmax().0 == network.eval(&datum.input).argmax().0 { 1 } else { 0 };
             }
-            trace!("go: batch #{:?}, network is {:?}", i, network);
+            debug!("go: batch #{:?}, network is {:?}", i, network);
             println!("batch #{:?}: guess rate is {:?}", i, (guessed as f32) / (tst_data.len() as f32));
-
-            j=j+1;
-            if j>10 {
-                break;
-            }
-
-
         }
     }
 
-
-
-        
 
 }
