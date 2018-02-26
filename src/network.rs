@@ -60,7 +60,7 @@ pub struct Layer<T> where T: Float {
 
 fn random<T>() -> T where T: Float + Rand {
     let one = <T as One>::one();
-	<T as Zero>::zero() + rand::random::<T>() * (one + one) - one
+	<T as Zero>::zero() + rand::random::<T>() * (one + one + one + one + one + one) - one - one - one
 }
 
 impl<T> Layer<T> where T: Float {
@@ -275,6 +275,14 @@ impl<T> Network<T> where T: Float + Debug + FromPrimitive + 'static {
 			mse = mse + self.squared_error(&data[i]);
 		}
 		mse / T::from_f32(data.len() as f32).unwrap()
+	}
+
+	pub fn classification_rate(&self, data: &[Sample<T>]) -> f32 {
+		let mut guessed: usize = 0;
+		for datum in data {
+			guessed += if datum.expected.argmax().0 == self.eval(&datum.input).argmax().0 { 1 } else { 0 };
+		}
+		(guessed as f32) / (data.len() as f32)
 	}
 
 }
@@ -533,5 +541,39 @@ fn test_batch_grad() {
 	                             0.0015635,  -0.000522,   0.00061075, -0.00147475;
 	                             0.00351125,  0.00451,    0.00326975,  0.0042685;
 	                             0.00158575,  0.00112275, 0.00157075,  0.00110775], &gradient.layers[0].weights, 0.00001, "activations of first layer");
+
+}
+
+
+#[cfg(test)]
+fn asses_quality<T: Debug + Float + FromPrimitive + 'static>(network: Network<T>, data: Vec<Sample<T>>) -> f32 {
+	let mut guessed: usize = 0;
+	for datum in &data {
+		guessed += if datum.expected.argmax().0 == network.eval(&datum.input).argmax().0 { 1 } else { 0 };
+	}
+	(guessed as f32) / (data.len() as f32)
+}
+
+#[cfg(test)]
+#[test]
+fn test_learning() {
+	
+	/// let us teach network to differ horizontal from vertial lines on 2-by-2 image
+	debug!("");
+	debug!("======== test_learning ========");
+
+	let data: Vec<Sample<f64>> = get_mock_data::<Vec<Sample<f64>>>();
+	let mut network: Network<f64> = get_mock_network();
+	println!("initial network: guess rate is {:?}, mse is {:?}", network.classification_rate(&data), network.mean_squared_error(&data));
+
+
+	let mut previous_result = network.mean_squared_error(&data);
+	for i in 0..1000 {
+		network.refine(&data, 1.0);
+		let result = network.mean_squared_error(&data);
+		assert!(result<previous_result, "mean squared error reducing ({:?})", i);
+		println!("batch #{:?}: guess rate is {:?}, mse is {:?}", i, network.classification_rate(&data), network.mean_squared_error(&data));
+		previous_result = result;
+	}
 
 }

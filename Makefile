@@ -1,24 +1,33 @@
 
 
-RUST_LOG?=neurocr=debug
+CARGO?=cargo
+
+RUST_BACKTRACE=full
+
+
+RUST_LOG?=neurocr=error
+ERROR_RUST_LOG?=neurocr=error
+DEBUG_RUST_LOG?=neurocr=debug
+
+
+
+
+
+RUST_ENV?=RUST_BACKTRACE=${RUST_BACKTRACT}
+
+TARGET?=target
+
+
+
 
 all:
 	cargo build
 
 run: 
-	RUST_BACKTRACE=full RUST_LOG=${RUST_LOG} cargo run
+	${RUST_ENV} RUST_LOG=${ERROR_RUST_LOG} ${CARGO} run --release
 
 debug: 
-	RUST_BACKTRACE=full RUST_LOG=${RUST_LOG} cargo run
-
-
-log: 
-	mkdir -p target
-	RUST_BACKTRACE=full RUST_LOG=${RUST_LOG} cargo run > target/run-output.log 2>&1
+	${RUST_ENV} RUST_LOG=${DEBUG_RUST_LOG} ${CARGO} run
 
 test:
-	RUST_BACKTRACE=full RUST_LOG=${RUST_LOG} cargo test -- --nocapture
-
-test-log:
-	mkdir -p target
-	RUST_BACKTRACE=full RUST_LOG=${RUST_LOG} cargo test -- --nocapture > target/test-output.log 2>&1
+	${RUST_ENV} RUST_LOG=${DEBUG_RUST_LOG} ${CARGO} test -- --nocapture

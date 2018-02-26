@@ -29,15 +29,15 @@ fn mnist_to_samples(images: &[u8], labels: &[u8]) -> Vec<Sample<f64>> {
     let mut result: Vec<network::Sample<f64>> = Vec::with_capacity(labels.len());
 
     for i in 0..labels.len() {
-        let mut image_data = Vector::zeros(IMAGE_SIZE);
+        let mut image_data: Vector<f64> = Vector::zeros(IMAGE_SIZE);
         for pixel in images[IMAGE_SIZE*i..IMAGE_SIZE*(i+1)].iter().enumerate() {
             //// println!("pixel # {:?}, value is {:?}", pixel.0, pixel.1);
-            image_data[pixel.0] = *pixel.1 as f64;
+            image_data[pixel.0] = ((*pixel.1) as f64) / 256.0;
             ////println!("pixel result is {:?}", image_data[pixel.0]);
         }
 
-        let mut classification = Vector::zeros(10);
-        classification[labels[i] as usize] = 100.0;
+        let mut classification: Vector<f64> = Vector::zeros(10);
+        classification[labels[i] as usize] = 0.90;
         ////println!("classification at {:?} is {:?}", i, classification);
 
 
@@ -51,7 +51,7 @@ fn mnist_to_samples(images: &[u8], labels: &[u8]) -> Vec<Sample<f64>> {
 
 fn random<T>() -> T where T: Float + Rand {
     let one = <T as One>::one();
-	<T as Zero>::zero() + rand::random::<T>() * (one + one) - one
+	<T as Zero>::zero() + rand::random::<T>() * (one + one + one + one + one + one) - one - one - one
 }
 
 pub fn go() {
@@ -73,11 +73,12 @@ pub fn go() {
     let mut network: Network<f64> = Network::new(IMAGE_SIZE, &sizes, random);
 
     debug!("go: initial network is {:?}", network);
+    println!("initial network: guess rate is {:?}, mse is {:?}", network.classification_rate(&tst_data), network.mean_squared_error(&tst_data));
 
 
-    for k in 1..100 {
-        for i in 0..trn_data.len()/BATCH_SIZE {
-            network.refine(&trn_data[BATCH_SIZE*i..BATCH_SIZE*(i+1)], 100.0);
+    for k in 1..30 {
+        for i in 0..trn_data.len()/BATCH_SIZE-1 {
+            network.refine(&trn_data[BATCH_SIZE*i..BATCH_SIZE*(i+1)], 5.0);
             //debug!("go: batch #{:?}, gradient is {:?}", i, network.batch_grad(&trn_data[BATCH_SIZE*i..BATCH_SIZE*(i+1)]));
 
 
@@ -86,7 +87,7 @@ pub fn go() {
                 guessed += if datum.expected.argmax().0 == network.eval(&datum.input).argmax().0 { 1 } else { 0 };
             }
             debug!("go: batch #{:?}, network is {:?}", i, network);
-            println!("batch #{:?}: guess rate is {:?}", i, (guessed as f32) / (tst_data.len() as f32));
+            println!("batch #{:?}: guess rate is {:?}, mse is {:?}", i, network.classification_rate(&tst_data), network.mean_squared_error(&tst_data));
         }
     }
 
