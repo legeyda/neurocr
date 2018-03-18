@@ -7,7 +7,7 @@ use std::env::home_dir;
 use std::fs::create_dir_all;
 use std::path::PathBuf;
 use self::mnist::{Mnist, MnistBuilder};
-use std::vec::Vec;
+
 
 fn get_share_dir() -> PathBuf {
 	match home_dir() {

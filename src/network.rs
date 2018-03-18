@@ -1,26 +1,20 @@
 
 
+use std::fmt::Debug;
+use std::vec::Vec;
+use std::slice::Iter;
 
-//extern crate num;
-extern crate rulinalg;
 
 extern crate num;
-
-
-extern crate log;
+use self::num::{Float, One, Zero, FromPrimitive};
 
 extern crate rand;
-
-
-use self::rulinalg::matrix::{Matrix, BaseMatrix, BaseMatrixMut};
-use self::rulinalg::vector::{Vector};
-use self::num::{Float, One, Zero, FromPrimitive};
-use std::ops::{Add, Mul, Fn};
-use std::vec::Vec;
-use std::fmt::Debug;
 use self::rand::Rand;
 
+extern crate rulinalg;
+use self::rulinalg::vector::{Vector};
 
+use layer::{Layer, LayerEval, LayerGrad};
 
 
 
@@ -29,207 +23,129 @@ fn exp<T: Float>(x: T) -> T {
 	x.exp()
 }
 
-fn sigmoid<T: Float>(x: T) -> T {
-	let one: T = T::one();
-	one / (one + exp(-x))
-}
-
-#[cfg(test)]
-//#[test]
-fn test_sigmoid() {
-	assert_eq!(1.0, sigmoid(1.0));
-}
-
-fn sigmoid_prime<T: Float>(x: T) -> T {
-	let one: T = One::one();
-	let sigma: T = sigmoid(x);
-	sigma * (one - sigma)
-}
-
 #[derive(Debug)]
 pub struct Sample<T: Float> {
 	pub input: Vector<T>,
 	pub expected: Vector<T>
 }
 
-#[derive(Debug)]
-pub struct Layer<T> where T: Float {
-	biases: Vector<T>,
-	weights: Matrix<T>
-}
-
 fn random<T>() -> T where T: Float + Rand {
-    let one = <T as One>::one();
+	let one = <T as One>::one();
 	<T as Zero>::zero() + rand::random::<T>() * (one + one + one + one + one + one) - one - one - one
 }
 
-impl<T> Layer<T> where T: Float {
-	fn zeros(num_inputs: usize, num_neurons: usize) -> Layer<T> {
-		Layer { 
-			biases:  Vector::zeros(num_neurons), 
-			weights: Matrix::zeros(num_neurons, num_inputs)
-		}
-	}
 
-	fn new(num_inputs: usize, num_neurons: usize, generator: fn() -> T) -> Layer<T>  {
-		Layer { 
-			biases:  Vector::zeros(num_neurons)            .apply(&(|ignored| generator())), 
-			weights: Matrix::zeros(num_neurons, num_inputs).apply(&(|ignored| generator()))
-		}
-	}
-	
+
+
+
+
+fn sum_of_squares_value<T: Float>(expected: &Vector<T>, actual: &Vector<T>) -> T {
+	(actual.clone() - expected).apply(&(|x| x*x)).sum()
 }
+
+fn sum_of_squares_grad<T: Float>(expected: &Vector<T>, actual: &Vector<T>) -> Vector<T> {
+	let two: T=T::one()+T::one();
+	(actual.clone() - expected)*two
+}
+
+pub struct CostFunc<T: Float> {
+	value: fn(&Vector<T>, &Vector<T>) -> T,
+	grad:  fn(&Vector<T>, &Vector<T>) -> Vector<T>
+}
+
+impl<T: Float> CostFunc<T> {
+	fn new(value: fn(&Vector<T>, &Vector<T>) -> T, grad: fn(&Vector<T>, &Vector<T>) -> Vector<T>) -> CostFunc<T> {
+		CostFunc { value: value, grad: grad }
+	}
+}
+
+pub fn create_sum_of_squares_cost_function<T: Float>() -> CostFunc<T> {
+	CostFunc::new(sum_of_squares_value, sum_of_squares_grad)
+}
+
+
+
+
 
 //type float where float: Float + Debug + From<f64> + 'static;
 
-#[derive(Debug)]
 pub struct Network<T> where T: Float {
-	layers: Vec<Layer<T>>
+	layers: Vec<Box<Layer<T>>>,
+	cost_func: CostFunc<T>
 }
 
 impl<T> Network<T> where T: Float + Debug + FromPrimitive + 'static {
 	
-	pub fn new(input_size: usize, layer_sizes: &[usize], generator: fn() -> T) -> Network<T> {
-		let mut result = Network {
-			layers: Vec::new()
-		};
-		let mut previous_size = input_size;
-		for size in layer_sizes {
-			result.layers.push(Layer::new(previous_size, *size, generator));
-			previous_size=*size;
-		}
-		result
-	}
-
-	pub fn zeros(input_size: usize, layer_sizes: &[usize]) -> Network<T> {
-		let mut result = Network {
-			layers: Vec::new()
-		};
-		let mut previous_size = input_size;
-		for size in layer_sizes {
-			result.layers.push(Layer::zeros(previous_size, *size));
-			previous_size=*size;
-		}
-		result
+	pub fn new<'a>(layers: Vec<Box<Layer<T>>>, cost_func: CostFunc<T>) -> Network<T> {
+		Network { layers: layers, cost_func: cost_func }
 	}
 	
-	/// for each neuron in layer, weighted sum of its inputs
-	fn layer_weighted_sums(&self, layer: &Layer<T>, input: &Vector<T>) -> Vector<T> {
-		debug!("layer_weighted_sums: weights cols is {:?}, input size is {:?}", layer.weights.cols(), input.size());
-		&(layer.biases) + Vector::new((&(layer.weights)*input).into_vec())
-	}
-	
-	/// apply activation function (sigmoid) to weighted sums of layer
-	fn layer_eval(&self, weighted_sums: &Vector<T>) -> Vector<T> {
-		weighted_sums.clone().apply(&sigmoid)
-	}
-
 	// evaluate weighted sums and outputs of each layer
-	pub fn eval(&self, input: &Vector<T>) -> Vector<T> {
-		let mut iter = self.layers.iter();
+	pub fn eval<'a>(&'a self, input: &Vector<T>) -> Vector<T> {
+		let mut iter: Iter<'a, Box<Layer<T>>> = self.layers.iter();
 		let mut value;
 		match iter.next() {
-	        Some(layer) => {
-	        	value = self.layer_eval(&self.layer_weighted_sums(layer, input))
-	        },
-	        None => panic!("not a single layer in network"),
-	    }
+			Some(layer) => {
+				value = layer.eval(input).output();
+			},
+			None => panic!("not a single layer in network"),
+		}
 		loop {
-		    match iter.next() {
-		        Some(layer) => {
-			        value = self.layer_eval(&self.layer_weighted_sums(layer, &value))
-		        },
-		        None => break,
-		    }
+			match iter.next() {
+				Some(layer) => {
+					value = layer.eval(&value).output()
+				},
+				None => break,
+			}
 		}
 		value
 	}
 	
 	/// evaluate weighted sums and outputs of each layer
-	fn eval_layers(&self, input: &Vector<T>) -> (Vec<Vector<T>>, Vec<Vector<T>>) {
-		let n = self.layers.len();
-		let mut zs:      Vec<Vector<T>> = Vec::with_capacity(n);
-		let mut outputs: Vec<Vector<T>> = Vec::with_capacity(n);
-		
-		let mut iter = self.layers.iter();
+	fn eval_layers<'a>(&'a self, input: &Vector<T>) -> Vec<Box<LayerEval<T> + 'a>> {
+		let mut result: Vec<Box<LayerEval<T>>> = Vec::with_capacity(self.layers.len());
+
+		let mut iter: Iter<'a, Box<Layer<T> + 'a>> = self.layers.iter();
+		let mut value;
 		match iter.next() {
-	        Some(layer) => {
-	        	zs.push(self.layer_weighted_sums(layer, input));
-	        	outputs.push(self.layer_eval(&zs[zs.len()-1]));
-	        },
-	        None => panic!("not a single layer in network"),
-	    }
+			Some(layer) => {
+				result.push(layer.eval(&input));
+				value = result[result.len()-1].output();
+			},
+			None => panic!("not a single layer in network"),
+		}
 		loop {
-		    match iter.next() {
-		        Some(layer) => {
-					let temp =  self.layer_weighted_sums(layer, &outputs[outputs.len()-1]);
-		        	zs.push(temp);
-		        	outputs.push(self.layer_eval(&zs[zs.len()-1]));
-		        },
-		        None => break,
-		    }
+			match iter.next() {
+				Some(layer) => {
+					result.push(layer.eval(&value));
+					value = result[result.len()-1].output();
+				},
+				None => break,
+			}
 		}
-		(zs, outputs)
-	}
-
-
-	/// calculate gradient of layer
-	/// @param inputs: current input for layer (either data or previous layer output)
-	/// @param df_over_dz: partial gradient of output with respect to weighted sum of this layer
-	fn layer_grad(&self, inputs: &Vector<T>, df_over_dz: &Vector<T>) -> Layer<T> {
-		//let 
-		Layer {
-			biases:  df_over_dz.clone(),
-			weights: Matrix::new(df_over_dz.size(), 1, df_over_dz.data().clone()) * Matrix::new(1, inputs.size(), inputs.data().clone())
-		}
+		result
 	}
 	
 	
-	fn sample_grad(&self, input: &Vector<T>, expected_output: &Vector<T>) -> Network<T> {
+	/*fn sample_grad<'b, 'c>(&self, input: &'b Vector<T>, expected_output: &'c Vector<T>) -> Network<T> {
 		let n = self.layers.len();
-		trace!("sample_grad: # of layers is {:?}", n);
-		let (zs, outputs) = self.eval_layers(input);
-		let mut result: Vec<Layer<T>> = Vec::with_capacity(n);
+		let layer_evals = self.eval_layers(input);
 
-		// for each neuron of latest layer, derivative of error function with respect to output
-		let mut der = (&outputs[n-1] - expected_output);
-		trace!("sample_grad: before first iteraton der is {:?}", der);
-
-		// for all layers except the first, input is output of previous layer
+		let result = Vec::with_capacity(n);
+		let mut der = (self.cost_func.grad)(&expected_output, &layer_evals[n-1].output());
 		if n>1 {
 			let mut i: usize = n-1;
-			// loop for layers from last to second, excluding first
-			while i>0 { // todo rewrite with range(...).rev()
-				trace!("sample_grad: processing layer # {:?}", i);
-				
-				// for each neuron in this layer, derivative of error function with respect to its weighted sum
-				der = der.elemul(&zs[i].clone().apply(&sigmoid_prime));
-				trace!("sample_grad: applied sigmoid prime at # {:?} is {:?}", i, zs[i].clone().apply(&sigmoid_prime));
-				trace!("sample_grad: G{:?} is {:?}", i, der);
-
-				result.insert(0, self.layer_grad(&outputs[i-1], &der));
-				trace!("sample_grad: layer #{:?}'s gradient is {:?}", i, result[0]);
-				
-				// for each neuron of previous layer, derivative of error function with respect to output of neuron
-				der = Vector::new((
-					self.layers[i].weights.transpose() 
-					* Matrix::new(der.size(), 1, der.data().clone())
-				).data().clone()); // todo optimize convertions between matrix&vector
-
+			while i>0 {
+				let grad = layer_evals[i].grad(&der);
+				result.insert(0, grad.param_grad());
+				der = grad.input_grad();
 				i-=1;
 			}
 		}
-		// for the first layer, input is network input
-		trace!("sample_grad: processing first layer");
+		let grad = layer_evals[0].grad(&der);
+		result.insert(0, grad.param_grad());
 
-		// for each neuron in first layer, derivative of error function with respect to its weighted sum
-		der = der.elemul(&zs[0].clone().apply(&sigmoid_prime));
-		trace!("sample_grad: G0 is {:?}", der);
-
-		trace!("sample_grad: first layer's gradient is {:?}", self.layer_grad(input, &der));
-		result.insert(0, self.layer_grad(input, &der));
-		
-		return Network { layers: result };
+		Network::new(result)
 	}
 
 	fn batch_grad(&self, test_data: &[Sample<T>]) -> Network<T> {
@@ -237,53 +153,97 @@ impl<T> Network<T> where T: Float + Debug + FromPrimitive + 'static {
 		let mut iter = test_data.iter();
 		let mut result;
 		match iter.next() {
-	        Some(sample) => {
-	        	result = self.sample_grad(&sample.input, &sample.expected);
-	        },
-	        None => panic!("not a single data in batch"),
-	    }
+			Some(sample) => {
+				result = self.sample_grad(&sample.input, &sample.expected);
+			},
+			None => panic!("not a single data in batch"),
+		}
 		loop {
-		    match iter.next() {
-		        Some(sample) => {
-			        result = result + &self.sample_grad(&sample.input, &sample.expected);
-		        },
-		        None => break,
-		    }
+			match iter.next() {
+				Some(sample) => {
+					result = result + &self.sample_grad(&sample.input, &sample.expected);
+				},
+				None => break,
+			}
 		}
 		let one: T = One::one();
 		result*(one/T::from_f32(n).unwrap())
-	}
+	}*/
 
-	pub fn refine(&mut self, data: &[Sample<T>], step: T) {
-		trace!("refine: data is {:?}", data);	
-		let grad = self.batch_grad(data);
-		debug!("refine: self # of layers is {:?}", self.layers.len());
-		trace!("refine: self is {:?}", self);
-		debug!("refine: grad # of layers is {:?}", grad.layers.len());
-		debug!("refine: grad is {:?}", grad);	
-		*self = (self as &Network<T>) + &(grad*(-step))
-	}
+	fn sample_grad<'a>(&'a self, input: &Vector<T>, expected: &Vector<T>) -> Vec<Box<LayerGrad<T> + 'a>> {
+		let n = self.layers.len();
+		let mut result: Vec<Box<LayerGrad<T> + 'a>> = Vec::with_capacity(n);
+		let layer_evals = self.eval_layers(input);
 
-	pub fn squared_error(&self, sample: &Sample<T>) -> T {
-		(self.eval(&sample.input) - &sample.expected).apply(&(|x| x*x)).sum()
-	}
-
-	pub fn mean_squared_error(&self, data: &[Sample<T>]) -> T {
-		let n = data.len();
-		let mut mse = self.squared_error(&data[0]);
-		for i in 1..data.len() {
-			mse = mse + self.squared_error(&data[i]);
+		let mut i=n-1;
+		result.insert(0, layer_evals[i].grad(&(self.cost_func.grad)(expected, &layer_evals[i].output())));
+		
+		if i>=0 {
+			i=i-1;
+			while i>0 {
+				result.insert(0, layer_evals[i].grad(&result[0].input_grad()));
+				i=i-1;
+			}
+			result.insert(0, layer_evals[i].grad(&result[0].input_grad()));
 		}
-		mse / T::from_f32(data.len() as f32).unwrap()
+
+		result
 	}
 
-	pub fn classification_rate(&self, data: &[Sample<T>]) -> f32 {
-		let mut guessed: usize = 0;
+	fn batch_grad<'a>(&'a self, test_data: &[Sample<T>]) -> Vec<Vec<Box<LayerGrad<T> + 'a>>> {
+		let mut iter = test_data.iter();
+		let mut result: Vec<Vec<Box<LayerGrad<T> + 'a>>> = Vec::with_capacity(test_data.len());
+		match iter.next() {
+			Some(sample) => {
+				result.insert(0, self.sample_grad(&sample.input, &sample.expected));
+			},
+			None => panic!("not a single data in batch"),
+		}
+		loop {
+			match iter.next() {
+				Some(sample) => {
+					result.insert(0, self.sample_grad(&sample.input, &sample.expected));
+				},
+				None => break,
+			}
+		}
+		result
+	}
+
+	pub fn batch_learn<'a>(&'a mut self, data: &[Sample<T>], step: T) {
+		let step_for_each: T = step/T::from_f32(data.len() as f32).unwrap();
+		for sample_grads in self.batch_grad(data) {
+			for layer_grad in sample_grads {
+				layer_grad.apply(step_for_each);
+			}
+		}
+	}
+
+
+	pub fn cost<'a> (&'a self, input: &Vector<T>,  expected: &Vector<T>) -> T {
+		(self.cost_func.value)(expected, &self.eval(input))
+	}
+
+	pub fn batch_mean_cost<'a>(&'a self, data: &[Sample<T>]) -> T {
+		let mut result: T = Zero::zero();
 		for datum in data {
-			guessed += if datum.expected.argmax().0 == self.eval(&datum.input).argmax().0 { 1 } else { 0 };
+			result = result + self.cost(&datum.input, &datum.expected);
 		}
-		(guessed as f32) / (data.len() as f32)
+		result/T::from_f32(data.len() as f32).unwrap()
 	}
+
+	pub fn sample_class_rate<'a> (&'a self, sample: &Sample<T>) -> f32 {
+		if sample.expected.argmax().0 == self.eval(&sample.input).argmax().0 { 1.0 } else { 0.0 }
+	}
+
+	pub fn batch_class_rate<'a, 'b> (&'a self, data: &'b [Sample<T>]) -> f32 {
+		let mut guessed: f32 = 0.0;
+		for datum in data {
+			guessed += self.sample_class_rate(datum);
+		}
+		guessed / (data.len() as f32)
+	}
+
 
 }
 
@@ -291,118 +251,12 @@ impl<T> Network<T> where T: Float + Debug + FromPrimitive + 'static {
 
 
 
-impl<'rhs, T> Add<&'rhs Network<T>> for Network<T> where T: Float {
-	type Output = Network<T>;
-	fn add(mut self, rhs: &Network<T>) -> Self::Output {
-		if self.layers.len() != rhs.layers.len() {
-			panic!("add: network dimensions do not match");
-		}
-		for i in 0..self.layers.len() {
-			self.layers[i] = &self.layers[i] + &rhs.layers[i];
-		}
-		self
-	}
-}
 
-impl<'lhs, 'rhs, T> Add<&'rhs Network<T>> for &'lhs Network<T> where T: Float {
-	type Output = Network<T>;
-	fn add(self, rhs: &Network<T>) -> Self::Output {
-		if self.layers.len() != rhs.layers.len() {
-			panic!("add: network dimensions do not match left {:?}, right {:?}", self.layers.len(), rhs.layers.len());
-		}
-		let mut layers = Vec::with_capacity(self.layers.len());
-		for i in 0..self.layers.len() {
-			layers.push(&self.layers[i] + &rhs.layers[i]);
-		}
-		Network {
-			layers: layers
-		}
-	}
-}
-
-impl <T> Mul<T> for Network<T> where T: Float {
-	type Output = Network<T>;
-	fn mul(mut self, multiplier: T) -> Self::Output {
-		for i in 0..self.layers.len() {
-			self.layers[i] = &self.layers[i] * multiplier;
-		}
-		self
-	}
-}
-
-
-
-
-
-impl <T> Add<Layer<T>> for Layer<T> where T: Float {
-	type Output = Layer<T>;
-	fn add(mut self, rhs: Layer<T>) -> Self::Output {
-		if self.biases.size() != rhs.biases.size() 
-		|| self.weights.cols() != rhs.weights.cols()
-		|| self.weights.rows() != rhs.weights.rows() {
-			panic!("add: layer dimensions do not match")
-		}
-		self.biases  = self.biases  + rhs.biases;
-		self.weights = self.weights + rhs.weights;
-		self
-	}
-}
-
-impl <'lhs, 'rhs, T> Add<&'rhs Layer<T>> for &'lhs Layer<T> where T: Float {
-	type Output = Layer<T>;
-	fn add(self, rhs: &Layer<T>) -> Self::Output {
-		if self.biases.size() != rhs.biases.size() 
-		|| self.weights.cols() != rhs.weights.cols()
-		|| self.weights.rows() != rhs.weights.rows() {
-			panic!("add: layer dimensions do not match")
-		}
-		Layer {
-			biases:  &self.biases  + &rhs.biases,
-			weights: &self.weights + &rhs.weights
-		}
-	}
-}
-
-
-impl <T> Mul<T> for Layer<T> where T: Float {
-	type Output = Layer<T>;
-	fn mul(mut self, multiplier: T) -> Self::Output {
-		self.biases  = self.biases  * multiplier;
-		self.weights = self.weights * multiplier;
-		self
-	}
-}
-
-impl<'lhs, T> Mul<T> for &'lhs Layer<T> where T: Float {
-	type Output = Layer<T>;
-	fn mul(self, multiplier: T) -> Self::Output {
-		Layer {
-			biases:  &self.biases  * multiplier, 
-			weights: &self.weights * multiplier
-		}
-	}
-}
 
 
 
 #[cfg(test)]
 extern crate env_logger;
-
-// #[cfg(test)]
-// fn quality<T>(outputs: &Vec<T>, ) -> T {
-// 	let sample = Sample {input: vector![1.0, 1.0, 0.0, 0.0], expected: vector![1.0, 0.0] };
-
-
-
-// }
-
-
-
-
-
-
-//#[cfg(test)]
-//extern crate simple_logger;
 
 #[cfg(test)]
 #[test]
@@ -508,13 +362,13 @@ fn test_sampe_grad() {
 
 	assert_eq_vectors(&vector![-0.11965, 0.13861], &gradient.layers[1].biases, 0.00001, "biases of second layer");
 	assert_eq_matrices(&matrix![-0.045061, -0.037945, -0.050334, -0.060633;
-	                             0.052202,  0.043958,  0.058312,  0.070243], &gradient.layers[1].weights, 0.00001, "activations of second layer");
+								 0.052202,  0.043958,  0.058312,  0.070243], &gradient.layers[1].weights, 0.00001, "activations of second layer");
 
 	assert_eq_vectors(&vector![0.017753, 0.0153261, 0.0358261, -0.0063497], &gradient.layers[0].biases, 0.00001, "biases of first layer");
 	assert_eq_matrices(&matrix![0.017753,  0.017753, 0.000000, 0.000000;
-	                            0.015326,  0.015326, 0.000000, 0.000000; 
-	                            0.035826,  0.035826, 0.000000, 0.000000;
-	                           -0.006350, -0.006350, 0.000000, 0.000000], &gradient.layers[0].weights, 0.00001, "activations of first layer");
+								0.015326,  0.015326, 0.000000, 0.000000; 
+								0.035826,  0.035826, 0.000000, 0.000000;
+							   -0.006350, -0.006350, 0.000000, 0.000000], &gradient.layers[0].weights, 0.00001, "activations of first layer");
 
 }
 
@@ -534,13 +388,13 @@ fn test_batch_grad() {
 
 	assert_eq_vectors(&vector![-0.04731325, 0.02097025], &gradient.layers[1].biases, 0.00001, "biases of second layer");
 	assert_eq_matrices(&matrix![-0.012864325, -0.011900175, -0.0254638, -0.0217037;
-	                             0.005599925,  0.004623725,  0.0114036,  0.009610225], &gradient.layers[1].weights, 0.00001, "activations of second layer");
+								 0.005599925,  0.004623725,  0.0114036,  0.009610225], &gradient.layers[1].weights, 0.00001, "activations of second layer");
 
 	assert_eq_vectors(&vector![0.0074017825, 0.000088975, 0.0077797, 0.002693525], &gradient.layers[0].biases, 0.00001, "biases of first layer");
 	assert_eq_matrices(&matrix![ 0.004475,    0.00459075, 0.00281125,  0.002927;
-	                             0.0015635,  -0.000522,   0.00061075, -0.00147475;
-	                             0.00351125,  0.00451,    0.00326975,  0.0042685;
-	                             0.00158575,  0.00112275, 0.00157075,  0.00110775], &gradient.layers[0].weights, 0.00001, "activations of first layer");
+								 0.0015635,  -0.000522,   0.00061075, -0.00147475;
+								 0.00351125,  0.00451,    0.00326975,  0.0042685;
+								 0.00158575,  0.00112275, 0.00157075,  0.00110775], &gradient.layers[0].weights, 0.00001, "activations of first layer");
 
 }
 
