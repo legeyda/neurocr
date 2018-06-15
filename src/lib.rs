@@ -69,7 +69,7 @@ pub fn go() {
 
 
 
-    let sizes: [usize;2] = [100, 10];
+    let sizes: [usize;2] = [30, 10];
     let mut network: Network<f64> = Network::new(IMAGE_SIZE, &sizes, random);
 
     debug!("go: initial network is {:?}", network);
