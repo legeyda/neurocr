@@ -14,6 +14,10 @@ fn exp<T: Float>(x: T) -> T {
 	x.exp()
 }
 
+pub struct actfunc<T> {
+	eval()
+}
+
 /// constians function references for evaluating of activation function and its derivative
 #[derive(Debug)]
 pub struct ActiFunc<T> {
@@ -67,33 +71,16 @@ pub fn create_sigmoid_actifunc<T: Float>() -> ActiFunc<T> {
 
 
 
-
-
 pub trait Layer<T> where T: Float {
-	/// evaluate layer and return LayerEvaluation object which encapsulates
-	/// the result along with intemediate result
-	fn eval<'a>(&'a self, input: &Vector<T>) -> Box<LayerEval<T> + 'a>;
-}
-
-/// encapsulates layer evaluation result with neccesary intermediate data
-pub trait LayerEval<T> where T: Float {
+	fn input(&'mut self, input: &Vector<T>);
 	fn output(&self) -> Vector<T>;
-	fn grad<'a>(&'a self, output_grad: &Vector<T>) -> Box<LayerGrad<T> + 'a>;
+	fn grad(&self, output_grad: &Vector<T>) -> Vector<T>; 
+	fn update(&'mut self, delta: &Vector<T>)
 }
-
-pub trait LayerGrad<T> where T: Float {
-	fn input_grad(&self) -> Vector<T>;
-
-	/// increment layer accotiated with this gradient using multiplier (layer = layer + multiplier*step)
-	fn apply(&mut self, multiplier: T);
-}
-
-
 
 
 
 /// structs for weighted layer
-
 #[derive(Debug)]
 pub struct WeightedLayer<T> where T: Float {
 	biases:   Vector<T>,
@@ -103,22 +90,14 @@ pub struct WeightedLayer<T> where T: Float {
 
 impl<T> WeightedLayer<T> where T: Float {
 	
-	pub fn zeros(num_inputs: usize, num_neurons: usize, function: ActiFunc<T>) -> WeightedLayer<T> {
-		WeightedLayer { 
-			biases:   Vector::zeros(num_neurons), 
-			weights:  Matrix::zeros(num_neurons, num_inputs),
-			function: function
-		}
-	}
-
-	pub fn new(num_inputs: usize, num_neurons: usize, function: ActiFunc<T>, generator: fn() -> T) -> WeightedLayer<T>  {
+	pub fn new(biases: Vector<T>, weights: Matrix<T>, function: ActiFunc<T>) -> WeightedLayer<T>  {
 		WeightedLayer {
 			biases:   Vector::zeros(num_neurons)            .apply(&(|_ignored| generator())), 
 			weights:  Matrix::zeros(num_neurons, num_inputs).apply(&(|_ignored| generator())),
 			function: function
 		}
 	}
-	
+
 }
 
 impl <T> Layer<T> for WeightedLayer<T> where T: Float {
