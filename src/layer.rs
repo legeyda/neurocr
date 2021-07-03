@@ -6,65 +6,7 @@ use self::rulinalg::matrix::{Matrix, BaseMatrix, BaseMatrixMut};
 use self::rulinalg::vector::Vector;
 
 
-
-
-
-#[inline]
-fn exp<T: Float>(x: T) -> T {
-	x.exp()
-}
-
-pub struct actfunc<T> {
-	eval()
-}
-
-/// constians function references for evaluating of activation function and its derivative
-#[derive(Debug)]
-pub struct ActiFunc<T> {
-	value:  fn(T)    -> T,
-	value2: fn(T, T) -> T,
-	diff:   fn(T)    -> T,
-	diff2:  fn(T, T) -> T
-}
-
-impl<T> ActiFunc<T> {
-	fn new(value: fn(T) -> T, value2: fn(T, T) -> T, diff: fn(T) -> T, diff2: fn(T, T) -> T) -> ActiFunc<T> {
-		ActiFunc {
-			value: value, value2: value2, diff: diff, diff2: diff2
-		}
-	}
-}
-
-
-
-
-fn sigmoid<T: Float>(x: T) -> T {
-	let one: T = T::one();
-	one / (one + exp(-x))
-}
-
-fn sigmoid2<T: Float>(x: T, _diff: T) -> T {
-	sigmoid(x)
-}
-
-fn sigmoid_diff<T: Float>(x: T) -> T {
-	sigmoid_diff2(x, sigmoid(x))
-}
-
-fn sigmoid_diff2<T: Float>(_x: T, value_at_x: T) -> T {
-	value_at_x * (T::one() - value_at_x)
-}
-
-pub fn create_sigmoid_actifunc<T: Float>() -> ActiFunc<T> {
-	ActiFunc::new(sigmoid, sigmoid2, sigmoid_diff, sigmoid_diff2)
-}
-
-
-
-
-
-
-
+use function;
 
 
 
@@ -72,11 +14,17 @@ pub fn create_sigmoid_actifunc<T: Float>() -> ActiFunc<T> {
 
 
 pub trait Layer<T> where T: Float {
-	fn input(&'mut self, input: &Vector<T>);
+	fn eval(&self, input: &Vector<T>) -> Vector<T>;
+	fn update(&mut self, delta: &Vector<T>);
+}
+
+pub trait Learnable<T> where T: Float {
+	fn input(&mut self, input: &Vector<T>);
 	fn output(&self) -> Vector<T>;
 	fn grad(&self, output_grad: &Vector<T>) -> Vector<T>; 
-	fn update(&'mut self, delta: &Vector<T>)
 }
+
+
 
 
 
